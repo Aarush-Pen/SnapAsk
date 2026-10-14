@@ -3,9 +3,15 @@
 A small macOS menu bar app: drag across part of your screen and a one-line answer
 from **Claude**, **ChatGPT** or **Gemini** shows up in the bottom-left corner.
 
+## Download
+
+**[⬇ Download SnapAsk.dmg](https://github.com/Aarush-Pen/SnapAsk/releases/latest/download/SnapAsk.dmg)**
+(macOS 13+, Apple silicon). All versions are on the [Releases page](https://github.com/Aarush-Pen/SnapAsk/releases).
+You'll need your own API key from Anthropic, OpenAI or Google.
+
 ## Quick start
 
-1. **Install.** Open `dist/SnapAsk.dmg` and drag SnapAsk into Applications (or build it
+1. **Install.** Open `SnapAsk.dmg` ([download](#download)) and drag SnapAsk into Applications (or build it
    first with `./build.sh`, see [Build the app](#build-the-app)). Open it from Applications.
    If macOS says it can't verify SnapAsk, click **Done**, then
    **System Settings › Privacy & Security › Open Anyway** (once).

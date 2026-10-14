@@ -11,8 +11,9 @@ You'll need your own API key from Anthropic, OpenAI or Google.
 
 ## Quick start
 
-1. **Install.** Open `SnapAsk.dmg` ([download](#download)) and drag SnapAsk into Applications (or build it
-   first with `./build.sh`, see [Build the app](#build-the-app)). Open it from Applications.
+1. **Install.** [Download SnapAsk.dmg](https://github.com/Aarush-Pen/SnapAsk/releases/latest/download/SnapAsk.dmg),
+   open it, and drag SnapAsk into Applications (or build it yourself, see
+   [Build the app](#build-the-app)). Open it from Applications.
    If macOS says it can't verify SnapAsk, click **Done**, then
    **System Settings › Privacy & Security › Open Anyway** (once).
 2. **Find it.** SnapAsk lives in the menu bar (viewfinder icon), not the Dock.
@@ -33,8 +34,8 @@ tccutil reset Accessibility com.snapask.app
 tccutil reset ScreenCapture com.snapask.app
 ```
 
-then open SnapAsk and grant both again. To share SnapAsk with friends, send them
-`dist/SnapAsk.dmg`; see [Share with friends](#share-with-friends).
+then open SnapAsk and grant both again. To share SnapAsk with friends, send them the
+[download link](#download); see [Share with friends](#share-with-friends).
 
 ## Keys
 
@@ -62,6 +63,7 @@ Requires macOS 13+ on Apple Silicon and Python 3.10+ (a [python.org](https://www
 That creates a fresh `.build-venv`, installs `requirements.txt` plus PyInstaller, and
 writes an ad-hoc signed **`dist/SnapAsk.app`** (about 55 MB, no Python needed to run it)
 and **`dist/SnapAsk.dmg`** to share (see below).
+Most people don't need to build: just [download the latest release](#download).
 Move the app to `/Applications` and open it. It lives in the menu bar (no Dock icon):
 
 - **Left-click** the menu bar icon to show or hide the settings window.
@@ -82,8 +84,11 @@ When run from source, macOS permissions belong to the terminal app you start it 
 
 ## Share with friends
 
-Send them **`dist/SnapAsk.dmg`** (about 30 MB). It holds the app, an Applications
-shortcut to drag it onto, and *How to open SnapAsk.txt* with these steps:
+Send them this link (about 30 MB):
+**https://github.com/Aarush-Pen/SnapAsk/releases/latest/download/SnapAsk.dmg**
+
+The disk image holds the app, an Applications shortcut to drag it onto, and
+*How to open SnapAsk.txt* with these steps:
 
 1. Drag SnapAsk into Applications and open it from there.
 2. macOS says it can't verify SnapAsk, because it isn't signed by an Apple developer
@@ -108,6 +113,17 @@ SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" NOTARY_PROFILE=snap
 ```
 
 The hardened runtime settings it needs are in `assets/entitlements.plist`.
+
+### Publishing a new version
+
+After changing the code, bump `__version__` in `snapask/__init__.py`, then:
+
+```bash
+./build.sh
+gh release create v2.0.1 dist/SnapAsk.dmg --title "SnapAsk 2.0.1" --notes "What changed"
+```
+
+The download link above always serves the newest release, so it never needs updating.
 
 ## Permissions
 

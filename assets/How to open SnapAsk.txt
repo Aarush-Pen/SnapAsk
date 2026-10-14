@@ -1,0 +1,19 @@
+SnapAsk: drag across a question on your screen, get a one-line AI answer.
+Needs a Mac with Apple silicon (M1 or newer) and macOS 13 or later.
+
+1. Drag SnapAsk into the Applications folder, then open it from Applications.
+
+2. If macOS says it can't verify SnapAsk (it isn't from the App Store):
+   click Done, open System Settings > Privacy & Security, scroll down and
+   click "Open Anyway" next to SnapAsk, then confirm. You only do this once.
+
+3. SnapAsk lives in the menu bar (the viewfinder icon), not the Dock.
+   It asks for two permissions: Accessibility (for its shortcuts) and
+   Screen Recording (to capture what you select). Turn SnapAsk on in both
+   lists, then quit and reopen it.
+
+4. Paste your own API key (Claude, ChatGPT or Gemini) in the SnapAsk window
+   and click Save. It stays in your Mac's Keychain, nowhere else.
+
+5. Press Control-A, then drag over a question. The answer appears in the
+   bottom-left corner; click it to copy. Escape cancels.

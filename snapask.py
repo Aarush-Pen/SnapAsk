@@ -3,10 +3,10 @@
 snapask.py - drag-to-ask screenshot helper for macOS.
 
   Ctrl+A   toggle screenshot mode (a tiny black dot follows under the cursor)
-  drag     press: the dot stays put and marks one corner; release: the
-           cursor tip is the opposite corner. No box is drawn. The region
-           is sent to Claude -> the answer appears, small, in the
-           bottom-left corner of that screen
+  drag     press: the dot jumps up to the cursor tip and stays there as one
+           corner; release: the cursor tip is the opposite corner. No box is
+           drawn. The region is sent to Claude -> the answer appears, small,
+           in the bottom-left corner of that screen
   Ctrl+S   cancel the pending request (nothing is shown) / hide the answer
   click    clicking the answer copies the full text to the clipboard
 
@@ -67,7 +67,8 @@ EFFORT = "high"                # how hard it thinks: "low", "medium", "high",
 MAX_TOKENS = 32000             # cap on thinking + answer; thinking counts toward it
 
 DOT_SIZE = 5                   # points
-DOT_OFFSET = (3, -24)          # from the cursor tip; negative y = below it
+DOT_OFFSET = (3, -24)          # from the cursor tip while idle; negative y =
+                               # below it. On press it jumps to the tip itself.
 
 ANSWER_FONT_SIZE = 11
 ANSWER_MARGIN = 4              # gap from the screen's bottom-left corner
@@ -121,8 +122,9 @@ class DotView(NSView):
 
 class SelectionView(NSView):
     """Full-screen, invisible view that catches the drag while armed. The
-    selection itself is never drawn: the dot stays pinned at the corner where
-    the drag began, and the region ends wherever the mouse is released."""
+    selection itself is never drawn: on press the dot jumps to the cursor tip
+    and stays pinned there as the start corner, and the region ends wherever
+    the mouse is released."""
 
     def acceptsFirstMouse_(self, event):
         return True
@@ -214,8 +216,8 @@ class Controller:
         self.armed = False
         self.overlays = []
         self.dot_timer = None
-        self.drag_start = None     # selection corner under the pinned dot
-        self.press_at = None       # cursor tip at mouse-down
+        self.drag_start = None     # cursor tip at mouse-down = start corner,
+                                   # where the dot is pinned during the drag
         self.job = None
         self._answer_token = None
         self._build_dot()
@@ -291,7 +293,7 @@ class Controller:
     # ---- screenshot mode
     def _arm(self):
         self.armed = True
-        self.drag_start = self.press_at = None
+        self.drag_start = None
         self.overlays = []
         for screen in NSScreen.screens():
             f = screen.frame()
@@ -316,7 +318,7 @@ class Controller:
         for p in self.overlays:
             p.orderOut_(None)
         self.overlays = []
-        self.drag_start = self.press_at = None
+        self.drag_start = None             # next arm: dot back below the cursor
 
     def _build_dot(self):
         self.dot = make_panel(NSMakeRect(0, 0, DOT_SIZE, DOT_SIZE),
@@ -335,10 +337,10 @@ class Controller:
 
     # ---- dragging (global Cocoa coords: origin bottom-left of main display)
     def drag_began(self, pt):
-        # The region starts at the dot, not the cursor tip, and the dot stays
-        # there as the only on-screen mark of the selection.
-        self.press_at = (pt.x, pt.y)
-        self.drag_start = (pt.x + DOT_OFFSET[0], pt.y + DOT_OFFSET[1])
+        # The region starts at the cursor tip. The dot jumps up from below the
+        # cursor to the tip and stays there as the only on-screen mark of the
+        # selection's start.
+        self.drag_start = (pt.x, pt.y)
         self._place_dot(*self.drag_start)
 
     def drag_ended(self, pt):
@@ -346,13 +348,12 @@ class Controller:
             return
         (x0, y0), (x1, y1) = self.drag_start, (pt.x, pt.y)
         x, y, w, h = min(x0, x1), min(y0, y1), abs(x1 - x0), abs(y1 - y0)
-        moved = max(abs(pt.x - self.press_at[0]), abs(pt.y - self.press_at[1]))
-        if moved < MIN_SELECTION or w < MIN_SELECTION or h < MIN_SELECTION:
-            self.drag_start = self.press_at = None     # just a click: stay armed,
-            self._move_dot()                           # dot follows the cursor again
+        if w < MIN_SELECTION or h < MIN_SELECTION:
+            self.drag_start = None                     # just a click: stay armed,
+            self._move_dot()                           # dot drops back below the cursor
             return
 
-        screen = self._screen_at(*self.press_at)
+        screen = self._screen_at(x0, y0)
         primary_h = NSScreen.screens()[0].frame().size.height
         region = (round(x), round(primary_h - (y + h)), round(w), round(h))
 

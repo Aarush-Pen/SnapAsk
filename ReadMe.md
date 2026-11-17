@@ -6,7 +6,7 @@ as a tiny one-line label in the bottom-left corner.
 | Keys | What it does |
 |------|--------------|
 | **Ctrl+A** | Toggle screenshot mode (a small black dot follows your cursor) |
-| **Drag** | Press where the dot is (it stays there as the region's top-left corner), release at the bottom-right. No box is drawn. The region is sent to Claude and the answer appears bottom-left |
+| **Drag** | Press at the region's top-left corner (the dot jumps up to the cursor tip and stays there to mark it), release at the bottom-right. No box is drawn. The region is sent to Claude and the answer appears bottom-left |
 | **Ctrl+S** | Cancel a pending request (nothing is shown), or hide the answer |
 | **Click the answer** | Copy the full answer to the clipboard |
 | **Ctrl+C** (in the terminal) | Quit |
@@ -97,7 +97,8 @@ open (minimizing it is fine). To quit, press Ctrl+C in that window.
 To try it out:
 
 1. Press Ctrl+A. A small dot appears just below your cursor.
-2. Put the dot on the top-left of a question and drag to its bottom-right.
+2. Press with the cursor tip at the top-left of a question (the dot jumps up to
+   the tip to mark it) and drag to its bottom-right.
 3. The answer appears in the bottom-left corner. Click it to copy.
 
 ### Optional: a `snapask` command

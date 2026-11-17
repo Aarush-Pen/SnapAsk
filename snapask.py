@@ -3,15 +3,18 @@
 snapask.py - drag-to-ask screenshot helper for macOS.
 
   Ctrl+A   toggle screenshot mode (a tiny black dot follows under the cursor)
-  drag     select a region -> it's sent to Claude -> the answer appears,
-           small, in the bottom-left corner of that screen
+  drag     press: the dot stays put and marks one corner; release: the
+           cursor tip is the opposite corner. No box is drawn. The region
+           is sent to Claude -> the answer appears, small, in the
+           bottom-left corner of that screen
   Ctrl+S   cancel the pending request (nothing is shown) / hide the answer
   click    clicking the answer copies the full text to the clipboard
 
-Setup (see README.md):
-  pip install -r requirements.txt
+Setup (see ReadMe.md):
+  python3 -m venv .venv && source .venv/bin/activate
+  pip install -r req.txt
   cp .env.example .env        # then paste your key into .env
-  python snapask.py
+  python snapask.py           # or, without activating: .venv/bin/python snapask.py
 
 macOS permissions (System Settings > Privacy & Security), granted to the app
 you launch this from (Terminal, iTerm, VS Code, ...):
@@ -49,7 +52,6 @@ from AppKit import (
     NSPanel,
     NSPasteboard,
     NSPasteboardTypeString,
-    NSRectFillUsingOperation,
     NSScreen,
     NSScreenSaverWindowLevel,
     NSTextField,
@@ -59,7 +61,7 @@ from Foundation import NSRunLoop, NSRunLoopCommonModes, NSTimer
 from PyObjCTools import AppHelper
 
 # ----------------------------------------------------------------- settings --
-MODEL = "claude-opus-5-5"      # or "claude-sonnet-5" / "claude-haiku-4-5-20251001"
+MODEL = "claude-opus-5-5"      # or "claude-sonnet-5-5" / "claude-haiku-5-5"
 EFFORT = "high"                # how hard it thinks: "low", "medium", "high",
                                # "xhigh", "max" (higher = smarter, slower, pricier)
 MAX_TOKENS = 32000             # cap on thinking + answer; thinking counts toward it
@@ -92,7 +94,6 @@ SYSTEM_PROMPT = (
 _PANEL_STYLE = 0 | (1 << 7)                 # borderless + non-activating
 _PANEL_BEHAVIOR = (1 << 0) | (1 << 4) | (1 << 8)  # all Spaces, stationary,
                                                   # over full-screen apps
-_COMPOSITE_COPY = 1                         # NSCompositingOperationCopy
 
 CONTROLLER = None
 
@@ -119,7 +120,9 @@ class DotView(NSView):
 
 
 class SelectionView(NSView):
-    """Full-screen, invisible view that catches the drag while armed."""
+    """Full-screen, invisible view that catches the drag while armed. The
+    selection itself is never drawn: the dot stays pinned at the corner where
+    the drag began, and the region ends wherever the mouse is released."""
 
     def acceptsFirstMouse_(self, event):
         return True
@@ -127,30 +130,13 @@ class SelectionView(NSView):
     def mouseDown_(self, event):
         CONTROLLER.drag_began(NSEvent.mouseLocation())
 
-    def mouseDragged_(self, event):
-        CONTROLLER.drag_moved(NSEvent.mouseLocation())
-
     def mouseUp_(self, event):
         CONTROLLER.drag_ended(NSEvent.mouseLocation())
 
     def drawRect_(self, rect):
-        NSColor.clearColor().set()
-        NSRectFillUsingOperation(self.bounds(), _COMPOSITE_COPY)
         # 1%-alpha fill: invisible, but guarantees the window gets the clicks
         NSColor.colorWithWhite_alpha_(0.0, 0.01).setFill()
         NSBezierPath.fillRect_(self.bounds())
-
-        sel = CONTROLLER.selection_rect()
-        if sel is None:
-            return
-        o = self.window().frame().origin
-        local = NSMakeRect(sel[0] - o.x, sel[1] - o.y, sel[2], sel[3])
-        NSColor.colorWithWhite_alpha_(0.0, 0.06).setFill()
-        NSBezierPath.fillRect_(local)
-        NSColor.colorWithWhite_alpha_(0.0, 0.55).setStroke()
-        path = NSBezierPath.bezierPathWithRect_(local)
-        path.setLineWidth_(1.0)
-        path.stroke()
 
 
 class AnswerView(NSView):
@@ -228,8 +214,8 @@ class Controller:
         self.armed = False
         self.overlays = []
         self.dot_timer = None
-        self.drag_start = None
-        self.drag_now = None
+        self.drag_start = None     # selection corner under the pinned dot
+        self.press_at = None       # cursor tip at mouse-down
         self.job = None
         self._answer_token = None
         self._build_dot()
@@ -305,12 +291,11 @@ class Controller:
     # ---- screenshot mode
     def _arm(self):
         self.armed = True
-        self.drag_start = self.drag_now = None
+        self.drag_start = self.press_at = None
         self.overlays = []
         for screen in NSScreen.screens():
             f = screen.frame()
             p = make_panel(f, NSScreenSaverWindowLevel, clickable=True)
-            p.setBackgroundColor_(NSColor.colorWithWhite_alpha_(0.0, 0.01))
             p.setContentView_(SelectionView.alloc().initWithFrame_(
                 NSMakeRect(0, 0, f.size.width, f.size.height)))
             p.orderFrontRegardless()
@@ -331,7 +316,7 @@ class Controller:
         for p in self.overlays:
             p.orderOut_(None)
         self.overlays = []
-        self.drag_start = self.drag_now = None
+        self.drag_start = self.press_at = None
 
     def _build_dot(self):
         self.dot = make_panel(NSMakeRect(0, 0, DOT_SIZE, DOT_SIZE),
@@ -340,41 +325,34 @@ class Controller:
             DotView.alloc().initWithFrame_(NSMakeRect(0, 0, DOT_SIZE, DOT_SIZE)))
 
     def _move_dot(self):
+        if self.drag_start is not None:
+            return                       # pinned at the selection's start corner
         p = NSEvent.mouseLocation()
-        self.dot.setFrameOrigin_((p.x + DOT_OFFSET[0] - DOT_SIZE / 2,
-                                  p.y + DOT_OFFSET[1] - DOT_SIZE / 2))
+        self._place_dot(p.x + DOT_OFFSET[0], p.y + DOT_OFFSET[1])
+
+    def _place_dot(self, x, y):
+        self.dot.setFrameOrigin_((x - DOT_SIZE / 2, y - DOT_SIZE / 2))
 
     # ---- dragging (global Cocoa coords: origin bottom-left of main display)
-    def selection_rect(self):
-        if self.drag_start is None or self.drag_now is None:
-            return None
-        (x0, y0), (x1, y1) = self.drag_start, self.drag_now
-        return (min(x0, x1), min(y0, y1), abs(x1 - x0), abs(y1 - y0))
-
-    def _redraw(self):
-        for p in self.overlays:
-            p.contentView().setNeedsDisplay_(True)
-
     def drag_began(self, pt):
-        self.drag_start = self.drag_now = (pt.x, pt.y)
-        self._redraw()
-
-    def drag_moved(self, pt):
-        if self.drag_start is not None:
-            self.drag_now = (pt.x, pt.y)
-            self._redraw()
+        # The region starts at the dot, not the cursor tip, and the dot stays
+        # there as the only on-screen mark of the selection.
+        self.press_at = (pt.x, pt.y)
+        self.drag_start = (pt.x + DOT_OFFSET[0], pt.y + DOT_OFFSET[1])
+        self._place_dot(*self.drag_start)
 
     def drag_ended(self, pt):
         if self.drag_start is None:
             return
-        self.drag_now = (pt.x, pt.y)
-        x, y, w, h = self.selection_rect()
-        if w < MIN_SELECTION or h < MIN_SELECTION:     # just a click: stay armed
-            self.drag_start = self.drag_now = None
-            self._redraw()
+        (x0, y0), (x1, y1) = self.drag_start, (pt.x, pt.y)
+        x, y, w, h = min(x0, x1), min(y0, y1), abs(x1 - x0), abs(y1 - y0)
+        moved = max(abs(pt.x - self.press_at[0]), abs(pt.y - self.press_at[1]))
+        if moved < MIN_SELECTION or w < MIN_SELECTION or h < MIN_SELECTION:
+            self.drag_start = self.press_at = None     # just a click: stay armed,
+            self._move_dot()                           # dot follows the cursor again
             return
 
-        screen = self._screen_at(*self.drag_start)
+        screen = self._screen_at(*self.press_at)
         primary_h = NSScreen.screens()[0].frame().size.height
         region = (round(x), round(primary_h - (y + h)), round(w), round(h))
 
@@ -421,7 +399,7 @@ class Controller:
             model=MODEL,
             max_tokens=MAX_TOKENS,
             system=SYSTEM_PROMPT,
-            extra_body={"output_config": {"effort": EFFORT}},
+            output_config={"effort": EFFORT},
             messages=[{
                 "role": "user",
                 "content": [
@@ -530,7 +508,7 @@ def main():
     key = os.environ.get("ANTHROPIC_API_KEY", "")
     if not key.startswith("sk-ant-") or key == "sk-ant-your-key-here":
         print("No API key found. Copy .env.example to .env and paste your key "
-              "into it (see README.md).")
+              "into it (see ReadMe.md).")
         sys.exit(1)
 
     app = NSApplication.sharedApplication()

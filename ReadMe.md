@@ -62,12 +62,14 @@ system-wide. To check that it worked:
 Create a key at [console.anthropic.com](https://console.anthropic.com), then:
 
 ```bash
-cp .env.example .env
+cp -n .env.example .env
 open -e .env
 ```
 
 In the TextEdit window that opens, replace `sk-ant-your-key-here` with your key, then
-save and close. `.env` is git-ignored, so your key is never committed.
+save and close. `.env` is git-ignored, so your key is never committed, and `git pull`
+never touches it. The `-n` means an existing `.env` is never overwritten, so running
+this step again keeps the key you already saved.
 
 ### 5. Grant macOS permissions
 
